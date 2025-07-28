@@ -3,6 +3,7 @@ import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from apuestas import generar_recomendacion, generar_varias_recomendaciones
+import time
 
 # 🔐 Cargar token desde variable de entorno
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -59,3 +60,7 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("ver_3", ver_tres))
 
     app.run_polling()
+    
+# Mantener vivo si Render no detecta actividad en puertos
+while True:
+    time.sleep(60)
