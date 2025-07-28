@@ -1,19 +1,14 @@
 import os
 import asyncio
 import logging
-from flask import Flask, request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-
 from apuestas import generar_recomendacion, generar_varias_recomendaciones
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
 
-# Inicializar Flask
-flask_app = Flask(__name__)
-
-# Cargar el token del bot
+# Cargar variables de entorno
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.environ.get("PORT", 5000))
@@ -66,19 +61,12 @@ async def ver_tres(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     asyncio.create_task(tarea())
 
-# Añadir comandos
+# Añadir handlers
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("recomendar", recomendar))
 app.add_handler(CommandHandler("ver_3", ver_tres))
 
-# Configurar endpoint para recibir Webhook
-@flask_app.route('/webhook', methods=['POST'])
-async def webhook():
-    update = Update.de_json(request.get_json(force=True), app.bot)
-    await app.process_update(update)
-    return "OK"
-
-# Lanzar servidor Flask y webhook
+# Ejecutar servidor con webhook
 if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
@@ -87,6 +75,6 @@ if __name__ == "__main__":
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
-        webhook_url=WEBHOOK_URL,
-        web_app=flask_app,
+        webhook_url=WEBHOOK_URL
     )
+
