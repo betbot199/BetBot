@@ -10,3 +10,4 @@ __pycache__/
 *.zip
 .vscode/
 replit.nix
+numpy==1.24.4
