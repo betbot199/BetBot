@@ -7,7 +7,7 @@ import json
 API_KEY = os.getenv("ODDS_API_KEY")
 BASE_URL = "https://api.the-odds-api.com/v4"
 VALID_REGIONS = ['us', 'uk', 'eu', 'au']
-MARKETS = 'h2h'
+MARKETS = 'h2h,spreads,totals,draw_no_bet'
 
 # Ruta de caché
 CACHE_FILE = "selecciones_cache.json"
@@ -58,7 +58,6 @@ def obtener_eventos_odds_api():
 
     ahora = datetime.datetime.utcnow()
 
-    # Si no se ha cargado la caché en esta sesión, intenta desde archivo
     if not ultima_actualizacion:
         cargar_cache_local()
 
@@ -94,6 +93,7 @@ def obtener_eventos_odds_api():
 
                         for casa in evento.get("bookmakers", []):
                             for mercado in casa.get("markets", []):
+                                mercado_key = mercado.get("key", "h2h")
                                 for sel in mercado.get("outcomes", []):
                                     cuota = sel.get("price")
                                     if not cuota or cuota <= 1.01:
@@ -110,12 +110,13 @@ def obtener_eventos_odds_api():
                                         "casa": casa.get("title", "Casa"),
                                         "probabilidad": prob,
                                         "ve": ve,
-                                        "hora": inicio.strftime("%a %d %b - %H:%M")
+                                        "hora": inicio.strftime("%a %d %b - %H:%M"),
+                                        "mercado": mercado_key
                                     })
                     except Exception:
                         continue
 
-                time.sleep(0.4)  # Evitar abuso API
+                time.sleep(0.4)
             except Exception as e:
                 print(f"⚠️ {sport_key} [{region}] → {e}")
 

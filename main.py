@@ -4,6 +4,7 @@ import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from apuestas import generar_recomendacion, generar_varias_recomendaciones
+from apuestas import generar_combinada_rentable
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO)
@@ -61,10 +62,30 @@ async def ver_tres(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     asyncio.create_task(tarea())
 
+# /profesional
+async def profesional(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🤖 Analizando mercados avanzados...")
+
+    async def tarea():
+        try:
+            print("🔍 Ejecutando tarea para /profesional")
+            texto = generar_combinada_rentable()
+            print(f"✅ Resultado generado:\n{texto}")
+            await update.message.reply_text(texto, parse_mode="Markdown")
+        except Exception as e:
+            import traceback
+            print(f"❌ Error en /profesional: {e}")
+            print(traceback.format_exc())
+            await update.message.reply_text("❌ Hubo un problema generando la combinada profesional.")
+
+    asyncio.create_task(tarea())
+
+
 # Añadir handlers
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("recomendar", recomendar))
 app.add_handler(CommandHandler("ver_3", ver_tres))
+app.add_handler(CommandHandler("profesional", profesional))
 
 # Ejecutar servidor con webhook
 if __name__ == "__main__":
