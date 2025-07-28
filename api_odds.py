@@ -2,16 +2,38 @@ import requests
 import time
 import datetime
 import os
+import json
 
 API_KEY = os.getenv("ODDS_API_KEY")
 BASE_URL = "https://api.the-odds-api.com/v4"
 VALID_REGIONS = ['us', 'uk', 'eu', 'au']
 MARKETS = 'h2h'
 
-# 🧠 CACHE en RAM
+# Ruta de caché
+CACHE_FILE = "selecciones_cache.json"
+
+# Variables de caché en memoria
 selecciones_cache = []
 ultima_actualizacion = None
 MAX_DIAS_EVENTO = 7
+
+def cargar_cache_local():
+    global selecciones_cache, ultima_actualizacion
+    if os.path.exists(CACHE_FILE):
+        with open(CACHE_FILE, 'r') as f:
+            data = json.load(f)
+            selecciones_cache = data.get("selecciones", [])
+            ts = data.get("timestamp")
+            if ts:
+                ultima_actualizacion = datetime.datetime.fromisoformat(ts)
+            print(f"📥 Caché cargada desde archivo con {len(selecciones_cache)} selecciones.")
+
+def guardar_cache_local():
+    with open(CACHE_FILE, 'w') as f:
+        json.dump({
+            "selecciones": selecciones_cache,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }, f)
 
 def get_sports():
     url = f"{BASE_URL}/sports/?apiKey={API_KEY}"
@@ -35,6 +57,11 @@ def obtener_eventos_odds_api():
     global selecciones_cache, ultima_actualizacion
 
     ahora = datetime.datetime.utcnow()
+
+    # Si no se ha cargado la caché en esta sesión, intenta desde archivo
+    if not ultima_actualizacion:
+        cargar_cache_local()
+
     if ultima_actualizacion and (ahora - ultima_actualizacion).total_seconds() < 86400:
         print("📥 Usando datos en caché.")
         return selecciones_cache
@@ -93,7 +120,7 @@ def obtener_eventos_odds_api():
                 print(f"⚠️ {sport_key} [{region}] → {e}")
 
     print(f"📦 Total de selecciones con cuotas procesadas: {len(selecciones)}")
-
     selecciones_cache = selecciones
     ultima_actualizacion = ahora
-    return selecciones
+    guardar_cache_local()
+    return selecciones_cache
