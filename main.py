@@ -1,16 +1,32 @@
 import os
 import asyncio
+import logging
+from flask import Flask, request
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
-from apuestas import generar_recomendacion, generar_varias_recomendaciones
-import time
 
-# 🔐 Cargar token desde variable de entorno
+from apuestas import generar_recomendacion, generar_varias_recomendaciones
+
+# Configurar logging
+logging.basicConfig(level=logging.INFO)
+
+# Inicializar Flask
+flask_app = Flask(__name__)
+
+# Cargar el token del bot
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+PORT = int(os.environ.get("PORT", 5000))
+
 if not TOKEN:
-    raise ValueError("❌ ERROR: La variable de entorno TELEGRAM_BOT_TOKEN no está definida.")
-else:
-    print("✅ TOKEN cargado correctamente.")
+    raise ValueError("❌ ERROR: La variable TELEGRAM_BOT_TOKEN no está definida.")
+if not WEBHOOK_URL:
+    raise ValueError("❌ ERROR: La variable WEBHOOK_URL no está definida.")
+
+print("✅ Token y Webhook URL cargados correctamente.")
+
+# Inicializar aplicación del bot
+app = ApplicationBuilder().token(TOKEN).build()
 
 # /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -25,7 +41,7 @@ async def recomendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("📩 Comando /recomendar recibido")
     await update.message.reply_text("🔍 Buscando combinada óptima... Dame unos segundos ⏳")
 
-    async def tarea_lenta():
+    async def tarea():
         try:
             texto = generar_recomendacion()
             await update.message.reply_text(texto, parse_mode="Markdown")
@@ -33,14 +49,14 @@ async def recomendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"❌ Error en /recomendar: {e}")
             await update.message.reply_text("❌ Hubo un problema generando la recomendación.")
 
-    asyncio.create_task(tarea_lenta())
+    asyncio.create_task(tarea())
 
 # /ver_3
 async def ver_tres(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("📩 Comando /ver_3 recibido")
     await update.message.reply_text("🔍 Buscando 3 combinadas con valor... ⏳")
 
-    async def tarea_lenta():
+    async def tarea():
         try:
             texto = generar_varias_recomendaciones(cantidad=3)
             await update.message.reply_text(texto, parse_mode="Markdown")
@@ -48,19 +64,29 @@ async def ver_tres(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"❌ Error en /ver_3: {e}")
             await update.message.reply_text("❌ Hubo un problema generando las combinadas.")
 
-    asyncio.create_task(tarea_lenta())
+    asyncio.create_task(tarea())
 
-# Inicializar aplicación del bot
+# Añadir comandos
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("recomendar", recomendar))
+app.add_handler(CommandHandler("ver_3", ver_tres))
+
+# Configurar endpoint para recibir Webhook
+@flask_app.route('/webhook', methods=['POST'])
+async def webhook():
+    update = Update.de_json(request.get_json(force=True), app.bot)
+    await app.process_update(update)
+    return "OK"
+
+# Lanzar servidor Flask y webhook
 if __name__ == "__main__":
-    print("🤖 Bot iniciado y conectado a The Odds API.")
-    app = ApplicationBuilder().token(TOKEN).build()
+    import nest_asyncio
+    nest_asyncio.apply()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("recomendar", recomendar))
-    app.add_handler(CommandHandler("ver_3", ver_tres))
-
-    app.run_polling()
-    
-# Mantener vivo si Render no detecta actividad en puertos
-while True:
-    time.sleep(60)
+    print("🚀 Iniciando servidor con Webhook...")
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL,
+        web_app=flask_app,
+    )
