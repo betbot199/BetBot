@@ -1,80 +1,99 @@
-import os
 import requests
-from time import sleep
+import time
+import datetime
+import os
 
 API_KEY = os.getenv("ODDS_API_KEY")
+BASE_URL = "https://api.the-odds-api.com/v4"
+VALID_REGIONS = ['us', 'uk', 'eu', 'au']
+MARKETS = 'h2h'
 
-# 🔍 Regiones que queremos incluir (agregadas Asia y Oceanía)
-REGIONES = ["eu", "uk", "us", "au", "cn", "jp"]
+# 🧠 CACHE en RAM
+selecciones_cache = []
+ultima_actualizacion = None
+MAX_DIAS_EVENTO = 7
 
-# 🏟️ Deportes seleccionados (puedes expandirlo)
-DEPORTES = [
-    "soccer_epl",
-    "soccer_uefa_champs_league",
-    "mma_mixed_martial_arts",
-    "basketball_nba",
-    "tennis_atp",
-    "cricket_international_t20",
-    "baseball_mlb",
-    "americanfootball_nfl",
-]
+def get_sports():
+    url = f"{BASE_URL}/sports/?apiKey={API_KEY}"
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()
+
+def get_odds_for_sport(sport_key, region):
+    url = f"{BASE_URL}/sports/{sport_key}/odds/"
+    params = {
+        'apiKey': API_KEY,
+        'regions': region,
+        'markets': MARKETS,
+        'oddsFormat': 'decimal'
+    }
+    response = requests.get(url, params=params)
+    response.raise_for_status()
+    return response.json()
 
 def obtener_eventos_odds_api():
-    if not API_KEY:
-        raise ValueError("❌ API_KEY no encontrada en variables de entorno.")
+    global selecciones_cache, ultima_actualizacion
 
+    ahora = datetime.datetime.utcnow()
+    if ultima_actualizacion and (ahora - ultima_actualizacion).total_seconds() < 86400:
+        print("📥 Usando datos en caché.")
+        return selecciones_cache
+
+    deportes = get_sports()
     selecciones = []
+    hoy = datetime.datetime.now(datetime.timezone.utc)
 
-    for deporte in DEPORTES:
-        for region in REGIONES:
-            print(f"🔍 Consultando {deporte} en región '{region}'...")
+    for deporte in deportes:
+        if not deporte.get('active') or deporte.get('has_outrights'):
+            continue
 
-            url = (
-                f"https://api.the-odds-api.com/v4/sports/{deporte}/odds/"
-                f"?apiKey={API_KEY}&regions={region}&markets=h2h,totals,spreads&oddsFormat=decimal"
-            )
+        sport_key = deporte['key']
+        sport_title = deporte['title']
 
+        for region in VALID_REGIONS:
             try:
-                response = requests.get(url, timeout=10)
+                eventos = get_odds_for_sport(sport_key, region)
 
-                if response.status_code == 200:
-                    eventos = response.json()
-                    print(f"✅ {deporte} [{region}] → {len(eventos)} eventos")
+                for evento in eventos:
+                    try:
+                        inicio = datetime.datetime.fromisoformat(evento['commence_time'].replace("Z", "+00:00"))
+                        if (inicio - hoy).days > MAX_DIAS_EVENTO:
+                            continue
 
-                    for evento in eventos:
-                        nombre_evento = evento.get("home_team", "") + " vs " + evento.get("away_team", "")
-                        for bookie in evento.get("bookmakers", []):
-                            casa = bookie["title"]
-                            for market in bookie.get("markets", []):
-                                tipo = market["key"]
-                                for outcome in market.get("outcomes", []):
-                                    equipo = outcome["name"]
-                                    cuota = outcome["price"]
-                                    prob = 1 / cuota if cuota > 0 else 0
-                                    ve = round(cuota * prob, 2)
+                        equipos = evento.get("teams", [])
+                        local = evento.get("home_team", "")
+                        visitante = [e for e in equipos if e != local]
+                        nombre_evento = f"{local} vs {visitante[0]}" if visitante else "Partido"
+
+                        for casa in evento.get("bookmakers", []):
+                            for mercado in casa.get("markets", []):
+                                for sel in mercado.get("outcomes", []):
+                                    cuota = sel.get("price")
+                                    if not cuota or cuota <= 1.01:
+                                        continue
+
+                                    prob = round((1 / cuota) * 100, 2)
+                                    ve = round(cuota * (prob / 100), 2)
 
                                     selecciones.append({
-                                        "deporte": deporte,
-                                        "mercado": tipo,
-                                        "equipo": equipo,
-                                        "cuota": cuota,
-                                        "probabilidad": round(prob * 100, 2),
-                                        "ve": ve,
+                                        "deporte": sport_title,
                                         "evento": nombre_evento,
-                                        "casa": casa,
+                                        "equipo": sel.get("name", "Equipo"),
+                                        "cuota": cuota,
+                                        "casa": casa.get("title", "Casa"),
+                                        "probabilidad": prob,
+                                        "ve": ve,
+                                        "hora": inicio.strftime("%a %d %b - %H:%M")
                                     })
+                    except Exception:
+                        continue
 
-                        # 👇 Progreso cada 1000 selecciones
-                        if len(selecciones) % 1000 == 0:
-                            print(f"📈 {len(selecciones)} selecciones acumuladas...")
-
-                else:
-                    print(f"⚠️ {deporte} [{region}] → Error {response.status_code}: {response.text}")
-
+                time.sleep(0.4)  # Evitar abuso API
             except Exception as e:
-                print(f"❌ Error al consultar {deporte} [{region}]: {e}")
-
-            sleep(0.3)  # evitar golpear demasiado la API
+                print(f"⚠️ {sport_key} [{region}] → {e}")
 
     print(f"📦 Total de selecciones con cuotas procesadas: {len(selecciones)}")
+
+    selecciones_cache = selecciones
+    ultima_actualizacion = ahora
     return selecciones
