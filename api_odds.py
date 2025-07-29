@@ -3,6 +3,7 @@ import time
 import datetime
 import os
 import json
+from mercados_validos import obtener_mercados_validos
 
 API_KEY = os.getenv("ODDS_API_KEY")
 BASE_URL = "https://api.the-odds-api.com/v4"
@@ -68,6 +69,8 @@ def obtener_eventos_odds_api():
     deportes = get_sports()
     selecciones = []
     hoy = datetime.datetime.now(datetime.timezone.utc)
+    
+    mercados_validos = obtener_mercados_validos()
 
     for deporte in deportes:
         if not deporte.get('active') or deporte.get('has_outrights'):
@@ -75,7 +78,12 @@ def obtener_eventos_odds_api():
 
         sport_key = deporte['key']
         sport_title = deporte['title']
+        
+        if "btts" not in mercados_validos.get(sport_key, []):
+        print(f"⛔️ {sport_key} no tiene mercado BTTS disponible. Saltando...")
+        continue
 
+    for region in VALID_REGIONS:
         for region in VALID_REGIONS:
             try:
                 eventos = get_odds_for_sport(sport_key, region)

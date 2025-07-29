@@ -1,0 +1,4 @@
+{
+  "soccer_epl": ["h2h", "btts", "spreads", "totals"],
+  "basketball_nba": ["h2h", "totals", "spreads"]
+}

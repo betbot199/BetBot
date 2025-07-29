@@ -1,5 +1,8 @@
 import random
 from api_odds import obtener_eventos_odds_api
+import os
+import json
+import datetime
 
 # Cache en memoria para guardar selecciones
 selecciones_cache = []
