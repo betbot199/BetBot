@@ -1,14 +1,16 @@
-# api_odds_basico.py
+# api_odds_profesional.py
 import requests
 import datetime
 import os
 import json
+import time
+from mercados_validos import obtener_mercados_validos
 
 API_KEY = os.getenv("ODDS_API_KEY")
 BASE_URL = "https://api.the-odds-api.com/v4"
 VALID_REGIONS = ['us', 'uk', 'eu', 'au']
-MARKETS = 'h2h'
-CACHE_FILE = "selecciones_h2h_cache.json"
+MARKETS = 'h2h,spreads,totals,draw_no_bet,btts'
+CACHE_FILE = "selecciones_profesional_cache.json"
 MAX_DIAS_EVENTO = 7
 
 selecciones_cache = []
@@ -51,14 +53,19 @@ def obtener_eventos_odds_api():
         return selecciones_cache
 
     deportes = get_sports()
+    mercados_validos = obtener_mercados_validos()
     selecciones = []
     hoy = datetime.datetime.now(datetime.timezone.utc)
 
     for deporte in deportes:
         if not deporte.get("active") or deporte.get("has_outrights"):
             continue
+
         sport_key = deporte["key"]
         sport_title = deporte["title"]
+
+        if not any(m in mercados_validos.get(sport_key, []) for m in ['btts', 'draw_no_bet', 'totals']):
+            continue
 
         for region in VALID_REGIONS:
             try:
@@ -75,6 +82,7 @@ def obtener_eventos_odds_api():
 
                     for casa in evento.get("bookmakers", []):
                         for mercado in casa.get("markets", []):
+                            mercado_key = mercado.get("key", "")
                             for sel in mercado.get("outcomes", []):
                                 cuota = sel.get("price")
                                 if not cuota or cuota <= 1.01:
@@ -90,10 +98,12 @@ def obtener_eventos_odds_api():
                                     "casa": casa.get("title", "Casa"),
                                     "probabilidad": prob,
                                     "ve": ve,
-                                    "hora": inicio.strftime("%a %d %b - %H:%M")
+                                    "hora": inicio.strftime("%a %d %b - %H:%M"),
+                                    "mercado": mercado_key
                                 })
             except:
                 continue
+            time.sleep(0.3)
 
     selecciones_cache = selecciones
     ultima_actualizacion = ahora
