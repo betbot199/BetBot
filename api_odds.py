@@ -69,7 +69,7 @@ def obtener_eventos_odds_api():
     deportes = get_sports()
     selecciones = []
     hoy = datetime.datetime.now(datetime.timezone.utc)
-    
+
     mercados_validos = obtener_mercados_validos()
 
     for deporte in deportes:
@@ -78,12 +78,11 @@ def obtener_eventos_odds_api():
 
         sport_key = deporte['key']
         sport_title = deporte['title']
-        
-        if "btts" not in mercados_validos.get(sport_key, []):
-        print(f"⛔️ {sport_key} no tiene mercado BTTS disponible. Saltando...")
-        continue
 
-    for region in VALID_REGIONS:
+        if "btts" not in mercados_validos.get(sport_key, []):
+            print(f"⛔️ {sport_key} no tiene mercado BTTS disponible. Saltando...")
+            continue
+
         for region in VALID_REGIONS:
             try:
                 eventos = get_odds_for_sport(sport_key, region)
@@ -133,3 +132,4 @@ def obtener_eventos_odds_api():
     ultima_actualizacion = ahora
     guardar_cache_local()
     return selecciones_cache
+
