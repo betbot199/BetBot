@@ -60,8 +60,8 @@ def generar_combinada_rentable():
     filtradas = [
         s for s in eventos
         if s.get("mercado") in mercados_rentables
-        and 1.2 <= s["cuota"] <= 3
-        and 25 <= s["probabilidad"] <= 80
+        and 1.2 <= s["cuota"] <= 15
+        and 10 <= s["probabilidad"] <= 80
         and s["ve"] > 1.0
     ]
     
