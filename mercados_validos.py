@@ -7,8 +7,7 @@ API_KEY = os.getenv("ODDS_API_KEY")
 BASE_URL = "https://api.the-odds-api.com/v4"
 CACHE_FILE = "mercados_validos_cache.json"
 
-# Tiempo máximo (en segundos) para usar caché → 24h
-MAX_CACHE_AGE = 86400
+MAX_CACHE_AGE = 86400  # 24h
 
 def cargar_cache_mercados():
     if not os.path.exists(CACHE_FILE):
@@ -24,9 +23,15 @@ def guardar_cache_mercados(data):
         json.dump(data, f, indent=2)
 
 def get_markets_for_sport(sport_key):
-    url = f"{BASE_URL}/sports/{sport_key}/odds/?apiKey={API_KEY}&regions=us&markets=h2h,spreads,totals,btts&oddsFormat=decimal"
+    url = f"{BASE_URL}/sports/{sport_key}/odds/"
+    params = {
+        "apiKey": API_KEY,
+        "regions": "us,uk,eu,au",
+        "markets": "h2h,spreads,totals",  # quitado btts y draw_no_bet
+        "oddsFormat": "decimal"
+    }
     try:
-        response = requests.get(url)
+        response = requests.get(url, params=params)
         response.raise_for_status()
         eventos = response.json()
         mercados = set()
@@ -34,10 +39,13 @@ def get_markets_for_sport(sport_key):
         for evento in eventos:
             for bookie in evento.get("bookmakers", []):
                 for market in bookie.get("markets", []):
-                    mercados.add(market.get("key"))
+                    key = market.get("key")
+                    if key:
+                        mercados.add(key)
 
         return list(mercados)
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ Error al consultar mercados para {sport_key}: {e}")
         return []
 
 def obtener_mercados_validos():
