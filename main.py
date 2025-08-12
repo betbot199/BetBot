@@ -111,7 +111,7 @@ app.add_handler(CommandHandler("bank", bank))
 app.add_handler(CommandHandler("setbank", setbank_cmd))
 
 # Ejecutar con webhook
-if _name_ == "_main_":
+if __name__ == "__main__":
     import nest_asyncio
     nest_asyncio.apply()
 
