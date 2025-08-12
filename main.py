@@ -1,85 +1,123 @@
-# main.py
-import os, asyncio, logging
+import os
+import asyncio
+import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+
+# Importar funciones desde apuestas.py
 from apuestas import scan, format_values, format_surebets, format_middles, get_bank, set_bank
 
+# Configuración del logging
 logging.basicConfig(level=logging.INFO)
 
+# Variables de entorno
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.environ.get("PORT", 5000))
 
 if not TOKEN:
-    raise ValueError("❌ Falta TELEGRAM_BOT_TOKEN")
+    raise ValueError("❌ ERROR: La variable TELEGRAM_BOT_TOKEN no está definida.")
 if not WEBHOOK_URL:
-    raise ValueError("❌ Falta WEBHOOK_URL")
+    raise ValueError("❌ ERROR: La variable WEBHOOK_URL no está definida.")
 
+print("✅ Token y Webhook URL cargados correctamente.")
+
+# Inicializar aplicación
 app = ApplicationBuilder().token(TOKEN).build()
 
+# /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "🤖 Bot de ineficiencias activo.\n"
-        "Comandos:\n"
-        "• /scan – escanea mercados y calcula valor\n"
-        "• /value [n] – muestra top n value bets\n"
-        "• /surebets [n] – muestra arbitrajes\n"
-        "• /middles [n] – (experimental)\n"
-        "• /bank [monto] – fija bank (ej: /bank 1000)\n"
-        f"Bank actual: {get_bank()}",
-        disable_web_page_preview=True
+        "👋 Bienvenido al bot profesional de apuestas.\n"
+        "Comandos disponibles:\n"
+        "💰 /value → Muestra apuestas con valor esperado positivo.\n"
+        "🔀 /surebets → Muestra oportunidades de arbitraje.\n"
+        "🎯 /middles → Muestra oportunidades de middles.\n"
+        "🏦 /bank → Consulta el bank actual.\n"
+        "📈 /setbank <cantidad> → Configura el bank."
     )
 
-async def cmd_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = await update.message.reply_text("🔍 Escaneando mercados… espera unos segundos ⏳")
-    def job():
-        v,s = scan()
-        return v,s
-    v,s = await asyncio.to_thread(job)
-    await msg.edit_text(f"✅ Scan listo. Value: {v} | Surebets: {s}")
+# /value
+async def value(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔍 Buscando value bets...")
 
-async def cmd_value(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    n = 5
-    if context.args:
-        try: n = int(context.args[0])
-        except: pass
-    txt = await asyncio.to_thread(format_values, n)
-    await update.message.reply_text(txt, parse_mode="Markdown", disable_web_page_preview=True)
+    async def tarea():
+        try:
+            apuestas = scan("value")
+            if not apuestas:
+                await update.message.reply_text("❌ No se encontraron value bets.")
+            else:
+                texto = format_values(apuestas)
+                await update.message.reply_text(texto, parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error en /value: {e}")
 
-async def cmd_surebets(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    n = 5
-    if context.args:
-        try: n = int(context.args[0])
-        except: pass
-    txt = await asyncio.to_thread(format_surebets, n)
-    await update.message.reply_text(txt, parse_mode="Markdown", disable_web_page_preview=True)
+    asyncio.create_task(tarea())
 
-async def cmd_middles(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    n = 5
-    if context.args:
-        try: n = int(context.args[0])
-        except: pass
-    txt = await asyncio.to_thread(format_middles, n)
-    await update.message.reply_text(txt, parse_mode="Markdown", disable_web_page_preview=True)
+# /surebets
+async def surebets(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔍 Buscando surebets...")
 
-async def cmd_bank(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        return await update.message.reply_text(f"Bank actual: {get_bank()}")
+    async def tarea():
+        try:
+            apuestas = scan("surebets")
+            if not apuestas:
+                await update.message.reply_text("❌ No se encontraron surebets.")
+            else:
+                texto = format_surebets(apuestas)
+                await update.message.reply_text(texto, parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error en /surebets: {e}")
+
+    asyncio.create_task(tarea())
+
+# /middles
+async def middles(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔍 Buscando middles...")
+
+    async def tarea():
+        try:
+            apuestas = scan("middles")
+            if not apuestas:
+                await update.message.reply_text("❌ No se encontraron middles.")
+            else:
+                texto = format_middles(apuestas)
+                await update.message.reply_text(texto, parse_mode="Markdown")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Error en /middles: {e}")
+
+    asyncio.create_task(tarea())
+
+# /bank
+async def bank(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    bank_actual = get_bank()
+    await update.message.reply_text(f"🏦 Bank actual: {bank_actual} unidades.")
+
+# /setbank
+async def setbank_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        amt = float(context.args[0])
-        set_bank(amt)
-        await update.message.reply_text(f"💰 Bank actualizado: {amt}")
-    except:
-        await update.message.reply_text("Formato inválido. Ej: /bank 1000")
+        cantidad = float(context.args[0])
+        set_bank(cantidad)
+        await update.message.reply_text(f"✅ Bank configurado a {cantidad} unidades.")
+    except (IndexError, ValueError):
+        await update.message.reply_text("❌ Uso correcto: /setbank <cantidad>")
 
+# Registrar comandos
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("scan", cmd_scan))
-app.add_handler(CommandHandler("value", cmd_value))
-app.add_handler(CommandHandler("surebets", cmd_surebets))
-app.add_handler(CommandHandler("middles", cmd_middles))
-app.add_handler(CommandHandler("bank", cmd_bank))
+app.add_handler(CommandHandler("value", value))
+app.add_handler(CommandHandler("surebets", surebets))
+app.add_handler(CommandHandler("middles", middles))
+app.add_handler(CommandHandler("bank", bank))
+app.add_handler(CommandHandler("setbank", setbank_cmd))
 
+# Ejecutar con webhook
 if _name_ == "_main_":
     import nest_asyncio
     nest_asyncio.apply()
-    app.run_webhook(listen="0.0.0.0", port=int(PORT), webhook_url=WEBHOOK_URL)
+
+    print("🚀 Iniciando servidor con Webhook...")
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL
+    )
